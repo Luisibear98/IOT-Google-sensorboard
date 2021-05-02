@@ -10,7 +10,7 @@ The class board.py has been modified to access directly to the sensors as they w
 For the aim of a final project, a moisture sensor has been added. To make it work, the idea is to connect an Arduino through the serial port to the rasberry.
 
 
-#Final GCLOUD arquitecture
+# Final GCLOUD arquitecture
 
 
 Finally, the rasberry will be sending the measurements to GCLOUD using the pub/sub protocol.
