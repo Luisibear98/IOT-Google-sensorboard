@@ -114,7 +114,11 @@ def main():
 
     # Create instances of EnviroKit and Cloud IoT.
     enviro = EnviroBoard()
+    
+    #Create instances for arduino
     arduino = serial.Serial('/dev/ttyACM0')
+    
+    #Executing the upload to gcloud function
     try:
         looping_upload(args,enviro,arduino)
     except:
