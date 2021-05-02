@@ -21,6 +21,10 @@ import serial
 import argparse
 import itertools
 import os
+from csv import DictWriter
+import datetime
+import csv
+import ast
 
 DEFAULT_CONFIG_LOCATION = os.path.join(os.path.dirname(__file__), 'cloud_config.ini')
 
@@ -34,6 +38,68 @@ def _none_to_nan(val):
     return float('nan') if val is None else val
 
 
+
+def looping_upload(args,enviro,arduino):
+   
+    with CloudIot(args.cloud_config) as cloud:      
+         
+         sensors = {}
+         read_period = int(args.upload_delay / (2 * args.display_duration))
+         
+         for read_count in itertools.count():
+              
+              #Accessing temperature and humidity sensors and saving on the dictionary
+              sensors['temperature'] =  round(enviro.temperature, 2)
+              sensors['humidity'] =  round(enviro.humidity, 2)
+              
+              #Opening serial port to read arduino moisture sensor
+              moisture = arduino.readline().decode('utf-8').rstrip()
+              if moisture:
+                 sensors['moisture'] = float(moisture)
+              else: 
+                 sensors['moisture'] = 0.0
+              
+              #Taking timestamp of the meassures
+              utc = datetime.datetime.utcnow() 
+              sensors['time'] = str(utc)
+                
+              #Accesing ambient and preassure sensors
+              sensors['ambient_light'] =  round(enviro.ambient_light,2)
+              sensors['pressure'] =  round(enviro.pressure,2)
+
+              #Priting on OLED display
+              msg = 'Temp: %.2f C\n' % _none_to_nan(sensors['temperature'])
+              msg += 'RH: %.2f %%' % _none_to_nan(sensors['humidity'])
+              
+              update_display(enviro.display, msg)
+              sleep(args.display_duration)
+              
+               
+              msg = 'Light: %.2f lux\n' % _none_to_nan(sensors['ambient_light'])
+              msg += 'Pressure: %.2f kPa' % _none_to_nan(sensors['pressure'])
+
+              update_display(enviro.display,msg)
+              sleep(args.display_duration)
+              
+              msg = 'Moisture: %.2f Mois\n' % _none_to_nan(sensors['ambient_light'])
+              msg += 'Last time: ' + str(sensors['time']) +'\n'
+
+                
+              #Local backup on CSV  
+              with open('event.csv', 'a') as f_object:
+                  dictwriter_object = DictWriter(f_object, fieldnames=['temperature','humidity','moisture','time','ambient_light','pressure'])
+                  dictwriter_object.writerow(sensors)
+  
+              f_object.close()
+
+              update_display(enviro.display, msg)
+              sleep(args.display_duration)
+              # If time has elapsed, attempt cloud upload.
+              if read_count % read_period == 0 and cloud.enabled():
+                  cloud.publish_message(sensors)
+    
+        
+ 
 def main():
     # Pull arguments from command line.
     parser = argparse.ArgumentParser(description='Enviro Kit Demo')
@@ -49,37 +115,15 @@ def main():
     # Create instances of EnviroKit and Cloud IoT.
     enviro = EnviroBoard()
     arduino = serial.Serial('/dev/ttyACM0')
-    with CloudIot(args.cloud_config) as cloud:
-        # Indefinitely update display and upload to cloud.
-        sensors = {}
-        read_period = int(args.upload_delay / (2 * args.display_duration))
-        for read_count in itertools.count():
-            # First display temperature and RH.
-            sensors['temperature'] = enviro.temperature
-            sensors['humidity'] = enviro.humidity
-            moisture = arduino.readline().decode('utf-8').rstrip()
-            if moisture:
+    try:
+        looping_upload(args,enviro,arduino)
+    except:
+        looping_upload(args,enviro,arduino)
 
-                sensors['moisture'] = float(moisture)
-            else: 
-               sensors['moisture'] = 0.0
-            
-            msg = 'Temp: %.2f C\n' % _none_to_nan(sensors['temperature'])
-            msg += 'RH: %.2f %%' % _none_to_nan(sensors['humidity'])
-            update_display(enviro.display, msg)
-            sleep(args.display_duration)
-            # After 5 seconds, switch to light and pressure.
-            sensors['ambient_light'] = enviro.ambient_light
-            sensors['pressure'] = enviro.pressure
-            msg = 'Light: %.2f lux\n' % _none_to_nan(sensors['ambient_light'])
-            msg += 'Pressure: %.2f kPa' % _none_to_nan(sensors['pressure'])
 
-            update_display(enviro.display, msg)
-            sleep(args.display_duration)
-            # If time has elapsed, attempt cloud upload.
-            if read_count % read_period == 0 and cloud.enabled():
-                print(sensors)
-                cloud.publish_message(sensors)
+
+
+
 
 
 if __name__ == '__main__':
